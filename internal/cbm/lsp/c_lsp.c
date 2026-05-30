@@ -1737,6 +1737,27 @@ static const CBMType* c_eval_expr_type_inner(CLSPContext* ctx, TSNode node) {
                             const char* qn = c_build_qn(ctx, fname);
                             rf = cbm_registry_lookup_func(ctx->registry, qn);
                         }
+                    } else if (strcmp(fn_type, "template_function") == 0) {
+                        TSNode name_node = ts_node_child_by_field_name(func_node, "name", 4);
+                        if (!ts_node_is_null(name_node)) {
+                            char* fname = c_node_text(ctx, name_node);
+                            if (fname) {
+                                const char* nk = ts_node_type(name_node);
+                                if (strcmp(nk, "qualified_identifier") == 0 ||
+                                    strcmp(nk, "scoped_identifier") == 0) {
+                                    const char* qn = c_build_qn(ctx, fname);
+                                    rf = cbm_registry_lookup_func(ctx->registry, qn);
+                                    if (!rf && ctx->module_qn) {
+                                        rf = cbm_registry_lookup_func(ctx->registry,
+                                            cbm_arena_sprintf(ctx->arena, "%s.%s",
+                                                ctx->module_qn, qn));
+                                    }
+                                } else {
+                                    const char* fqn = c_resolve_name(ctx, fname);
+                                    if (fqn) rf = cbm_registry_lookup_func(ctx->registry, fqn);
+                                }
+                            }
+                        }
                     }
 
                     if (rf && rf->type_param_names && rf->signature &&
@@ -1791,8 +1812,9 @@ static const CBMType* c_eval_expr_type_inner(CLSPContext* ctx, TSNode node) {
                                 if (deduced[ti]) { any_deduced = true; break; }
                             }
                             if (any_deduced) {
-                                ret = cbm_type_substitute(ctx->arena, ret,
+                                const CBMType* substituted_ret = cbm_type_substitute(ctx->arena, ret,
                                     rf->type_param_names, deduced);
+                                if (substituted_ret) ret = substituted_ret;
                             }
                         }
                     }
@@ -1800,6 +1822,7 @@ static const CBMType* c_eval_expr_type_inner(CLSPContext* ctx, TSNode node) {
             }
 
             // Unwrap references in return type
+            if (!ret) return cbm_type_unknown();
             if (ret->kind == CBM_TYPE_REFERENCE || ret->kind == CBM_TYPE_RVALUE_REF)
                 ret = ret->data.reference.elem;
             return ret;

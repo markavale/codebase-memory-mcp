@@ -1772,8 +1772,10 @@ int cbm_store_find_nodes_by_qn_suffix(cbm_store_t *s, const char *project, const
 
 void cbm_store_node_degree(cbm_store_t *s, int64_t node_id, int *in_deg, int *out_deg) {
     if (!s) {
-        if (in_deg) *in_deg = 0;
-        if (out_deg) *out_deg = 0;
+        if (in_deg)
+            *in_deg = 0;
+        if (out_deg)
+            *out_deg = 0;
         return;
     }
     *in_deg = 0;
@@ -2319,7 +2321,8 @@ static void where_add_like_hints(const char *column, const char *pattern, char *
             continue;
         int pool_was_full = (pool->count >= ST_LIKE_POOL_MAX);
         like_pool_add(pool, lp);
-        if (pool_was_full) continue; /* lp was freed — skip bind */
+        if (pool_was_full)
+            continue; /* lp was freed — skip bind */
         snprintf(bind_buf, sizeof(bind_buf), "%s LIKE ?%d", column, *bind_idx + SKIP_ONE);
         *wlen = where_append(where, where_sz, *wlen, nparams, bind_buf);
         where_bind_text(binds, bind_idx, lp);

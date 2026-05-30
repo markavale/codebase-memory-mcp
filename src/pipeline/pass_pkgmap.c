@@ -775,8 +775,7 @@ static bool is_pkgmap_manifest_basename(const char *basename) {
  * matched by the shared cbm_should_skip_dir helper so we don't walk
  * node_modules, .git, build, etc. Returns the number of manifests
  * parsed, accumulated across the whole walk. */
-static int pkgmap_walk_dir(const char *abs_dir, const char *rel_dir,
-                           cbm_pkg_entries_t *entries) {
+static int pkgmap_walk_dir(const char *abs_dir, const char *rel_dir, cbm_pkg_entries_t *entries) {
     DIR *dir = opendir(abs_dir);
     if (!dir) {
         return 0;
@@ -797,12 +796,20 @@ static int pkgmap_walk_dir(const char *abs_dir, const char *rel_dir,
             snprintf(rel_path, sizeof(rel_path), "%s", name);
         }
         struct stat st;
+#ifdef _WIN32
+        /* Windows has no lstat/S_ISLNK; symlinks aren't a concern for the
+         * MSYS2 build, so a plain stat is sufficient here. */
+        if (stat(abs_path, &st) != 0) {
+            continue;
+        }
+#else
         if (lstat(abs_path, &st) != 0) {
             continue;
         }
         if (S_ISLNK(st.st_mode)) {
             continue;
         }
+#endif
         if (S_ISDIR(st.st_mode)) {
             if (cbm_should_skip_dir(name, CBM_MODE_FULL)) {
                 continue;
@@ -902,8 +909,8 @@ CBMHashTable *cbm_pkgmap_build_from_repo(const char *repo_path, const cbm_file_i
 
     int from_walk = cbm_pkgmap_scan_repo(repo_path, &entries);
     cbm_log_info("pkgmap.scan", "manifests_from_files", pkgmap_itoa(from_files),
-                 "manifests_from_walk", pkgmap_itoa(from_walk),
-                 "entries", pkgmap_itoa(entries.count));
+                 "manifests_from_walk", pkgmap_itoa(from_walk), "entries",
+                 pkgmap_itoa(entries.count));
     CBMHashTable *map = cbm_pkgmap_build(&entries, SKIP_ONE, project_name);
     cbm_pkg_entries_free(&entries);
     return map;

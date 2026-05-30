@@ -974,8 +974,9 @@ static void sveltekit_file_visitor(const cbm_gbuf_node_t *node, void *userdata) 
     /* Find every DEFINES edge from this file to a Function or Variable. */
     const cbm_gbuf_edge_t **edges = NULL;
     int edge_count = 0;
-    if (cbm_gbuf_find_edges_by_source_type(ctx->gb, node->id, "DEFINES", &edges, &edge_count) != 0
-        || edge_count == 0) {
+    if (cbm_gbuf_find_edges_by_source_type(ctx->gb, node->id, "DEFINES", &edges, &edge_count) !=
+            0 ||
+        edge_count == 0) {
         return;
     }
 
@@ -1018,16 +1019,15 @@ static void sveltekit_file_visitor(const cbm_gbuf_node_t *node, void *userdata) 
         char route_props[CBM_SZ_256];
         snprintf(route_props, sizeof(route_props),
                  "{\"method\":\"%s\",\"framework\":\"sveltekit\"}", method);
-        int64_t route_id = cbm_gbuf_upsert_node(ctx->gb, "Route", route_path, route_qn, "", 0, 0,
-                                                route_props);
+        int64_t route_id =
+            cbm_gbuf_upsert_node(ctx->gb, "Route", route_path, route_qn, "", 0, 0, route_props);
         if (route_id == 0) {
             continue;
         }
         ctx->routes_created++;
 
         char hprops[CBM_SZ_256];
-        snprintf(hprops, sizeof(hprops),
-                 "{\"handler\":\"%s\",\"framework\":\"sveltekit\"%s}",
+        snprintf(hprops, sizeof(hprops), "{\"handler\":\"%s\",\"framework\":\"sveltekit\"%s}",
                  child->qualified_name ? child->qualified_name : child->name,
                  is_actions ? ",\"via\":\"actions_object\"" : "");
         cbm_gbuf_insert_edge(ctx->gb, child->id, route_id, "HANDLES", hprops);

@@ -78,6 +78,7 @@ const char **cbm_string_dispatch_suffixes(CBMLanguage lang) {
 // Forward declarations
 static char *extract_callee_name(CBMArena *a, TSNode node, const char *source, CBMLanguage lang);
 static char *gotemplate_callee(CBMArena *a, TSNode node, const char *source);
+static const char *strip_and_validate_string_arg(CBMArena *a, char *text);
 
 // Lean 4: check if an apply node is inside a type annotation.
 // Strategy: walk up to the nearest declaration boundary; if the apply falls
@@ -614,9 +615,98 @@ static char *extract_dart_callee(CBMArena *a, TSNode node, const char *source, c
     return NULL;
 }
 
+// SCSS: an `@include foo;` is an include_statement whose callee is its
+// `identifier` child (the mixin name).
+static char *extract_scss_callee(CBMArena *a, TSNode node, const char *source, const char *nk) {
+    if (strcmp(nk, "include_statement") != 0) {
+        return NULL;
+    }
+    TSNode id = cbm_find_child_by_kind(node, "identifier");
+    return ts_node_is_null(id) ? NULL : cbm_node_text(a, id, source);
+}
+
+// SQL: an `invocation` node's callee is nested object_reference > `name` field
+// (the same shape as a create_function's name).
+static char *extract_sql_callee(CBMArena *a, TSNode node, const char *source, const char *nk) {
+    if (strcmp(nk, "invocation") != 0) {
+        return NULL;
+    }
+    TSNode oref = cbm_find_child_by_kind(node, "object_reference");
+    if (ts_node_is_null(oref)) {
+        return NULL;
+    }
+    TSNode nm = ts_node_child_by_field_name(oref, TS_FIELD("name"));
+    return ts_node_is_null(nm) ? NULL : cbm_node_text(a, nm, source);
+}
+
+// COBOL: a `CALL 'HELPER'` is a call_statement whose `x` field is a string
+// literal naming the called program; the callee is that string sans quotes.
+static char *extract_cobol_callee(CBMArena *a, TSNode node, const char *source, const char *nk) {
+    if (strcmp(nk, "call_statement") != 0) {
+        return NULL;
+    }
+    TSNode x = ts_node_child_by_field_name(node, TS_FIELD("x"));
+    if (ts_node_is_null(x)) {
+        x = cbm_find_child_by_kind(node, "string");
+    }
+    if (ts_node_is_null(x)) {
+        return NULL;
+    }
+    char *text = cbm_node_text(a, x, source);
+    return (char *)strip_and_validate_string_arg(a, text);
+}
+
+// Elm: a `function_call_expr` has a `target` field; the callee identifier is
+// target > value_expr > `name` field (value_qid) > lower_case_identifier.
+static char *extract_elm_callee(CBMArena *a, TSNode node, const char *source, const char *nk) {
+    if (strcmp(nk, "function_call_expr") != 0) {
+        return NULL;
+    }
+    TSNode target = ts_node_child_by_field_name(node, TS_FIELD("target"));
+    if (ts_node_is_null(target)) {
+        return NULL;
+    }
+    TSNode ve = strcmp(ts_node_type(target), "value_expr") == 0
+                    ? target
+                    : cbm_find_child_by_kind(target, "value_expr");
+    if (ts_node_is_null(ve)) {
+        return NULL;
+    }
+    TSNode qid = ts_node_child_by_field_name(ve, TS_FIELD("name"));
+    if (ts_node_is_null(qid)) {
+        qid = cbm_find_child_by_kind(ve, "value_qid");
+    }
+    if (ts_node_is_null(qid)) {
+        return NULL;
+    }
+    TSNode id = cbm_find_child_by_kind(qid, "lower_case_identifier");
+    if (ts_node_is_null(id)) {
+        // module-qualified call: emit the whole qualified id text
+        return cbm_node_text(a, qid, source);
+    }
+    return cbm_node_text(a, id, source);
+}
+
 static char *extract_callee_lang_specific(CBMArena *a, TSNode node, const char *source,
                                           CBMLanguage lang) {
     const char *nk = ts_node_type(node);
+
+    if (lang == CBM_LANG_SCSS) {
+        char *c = extract_scss_callee(a, node, source, nk);
+        return c ? c : extract_scripting_callee(a, node, source, lang, nk);
+    }
+    if (lang == CBM_LANG_SQL) {
+        char *c = extract_sql_callee(a, node, source, nk);
+        return c ? c : extract_scripting_callee(a, node, source, lang, nk);
+    }
+    if (lang == CBM_LANG_COBOL) {
+        char *c = extract_cobol_callee(a, node, source, nk);
+        return c ? c : extract_scripting_callee(a, node, source, lang, nk);
+    }
+    if (lang == CBM_LANG_ELM) {
+        char *c = extract_elm_callee(a, node, source, nk);
+        return c ? c : extract_scripting_callee(a, node, source, lang, nk);
+    }
 
     if (lang == CBM_LANG_CLOJURE || lang == CBM_LANG_COMMONLISP || lang == CBM_LANG_SCHEME ||
         lang == CBM_LANG_FENNEL || lang == CBM_LANG_RACKET || lang == CBM_LANG_EMACSLISP) {

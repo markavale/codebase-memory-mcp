@@ -826,6 +826,57 @@ TSNode cbm_resolve_func_name(TSNode node, CBMLanguage lang) {
             }
         }
 
+        /* Teal: the `local function foo()` form reduces to a function_statement
+         * whose name is carried on a `function_name` child rather than the `name`
+         * field (the field is only populated for the bare `function foo()` form).
+         * func_name_node() already handled the field case above; here we cover the
+         * function_name child so local functions also produce a Function def. */
+        if (lang == CBM_LANG_TEAL && (strcmp(kind, "function_statement") == 0 ||
+                                      strcmp(kind, "function_signature") == 0)) {
+            TSNode fn = cbm_find_child_by_kind(node, "function_name");
+            if (!ts_node_is_null(fn)) {
+                return fn;
+            }
+        }
+
+        /* SCSS: function_statement/mixin_statement have no `name` field; the def
+         * name is a plain `name` child node. */
+        if (lang == CBM_LANG_SCSS &&
+            (strcmp(kind, "function_statement") == 0 || strcmp(kind, "mixin_statement") == 0)) {
+            TSNode nm = cbm_find_child_by_kind(node, "name");
+            if (!ts_node_is_null(nm)) {
+                return nm;
+            }
+        }
+
+        /* SQL: create_function has no `name` field; the function name is nested as
+         * object_reference > `name` field (an identifier). */
+        if (lang == CBM_LANG_SQL && strcmp(kind, "create_function") == 0) {
+            TSNode oref = cbm_find_child_by_kind(node, "object_reference");
+            if (!ts_node_is_null(oref)) {
+                TSNode nm = ts_node_child_by_field_name(oref, TS_FIELD("name"));
+                if (!ts_node_is_null(nm)) {
+                    return nm;
+                }
+            }
+        }
+
+        /* Elm: value_declaration carries its name on the
+         * `functionDeclarationLeft` field's function_declaration_left child,
+         * whose first lower_case_identifier is the function name. */
+        if (lang == CBM_LANG_ELM && strcmp(kind, "value_declaration") == 0) {
+            TSNode lhs = ts_node_child_by_field_name(node, TS_FIELD("functionDeclarationLeft"));
+            if (ts_node_is_null(lhs)) {
+                lhs = cbm_find_child_by_kind(node, "function_declaration_left");
+            }
+            if (!ts_node_is_null(lhs)) {
+                TSNode nm = cbm_find_child_by_kind(lhs, "lower_case_identifier");
+                if (!ts_node_is_null(nm)) {
+                    return nm;
+                }
+            }
+        }
+
         /* Pine Script: function_declaration_statement carries the name on the
          * `function` field (or `method` field for the method form), not `name`. */
         if (lang == CBM_LANG_PINE && strcmp(kind, "function_declaration_statement") == 0) {

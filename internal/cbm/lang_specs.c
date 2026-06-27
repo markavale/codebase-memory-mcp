@@ -636,7 +636,7 @@ static const char *css_import_types[] = {"import_statement", NULL};
 // ==================== SCSS ====================
 static const char *scss_func_types[] = {"mixin_statement", "function_statement", NULL};
 static const char *scss_module_types[] = {"stylesheet", NULL};
-static const char *scss_call_types[] = {"call_expression", NULL};
+static const char *scss_call_types[] = {"call_expression", "include_statement", NULL};
 static const char *scss_import_types[] = {"import_statement", "use_statement", "include_statement",
                                           NULL};
 static const char *scss_branch_types[] = {"if_statement", NULL};

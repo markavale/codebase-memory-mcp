@@ -253,15 +253,20 @@ static const parity_case_t case_julia = {
     "run(n) = helper(n)\n"};
 
 /*
- * NIX — FULLY DRIFTED. function_expression (`x: body`) not in generic, absent
- * from switch. The call (`double 21`) sits inside a lambda body bound in a let.
+ * NIX. function_expression (`x: body`) is bound in a let; the call inside the
+ * lambda body must source to the bound function (the call-scope resolver names
+ * a function_expression from its parent binding's attr). Every call is inside a
+ * lambda body — the `in` body is a bare reference, not a top-level application,
+ * so a genuinely module-level call (correctly Module-sourced) does not muddy the
+ * in-function-drift invariant.
  */
 static const parity_case_t case_nix = {
     CBM_LANG_NIX, "Nix", "a.nix",
     "let\n"
     "  double = x: x * 2;\n"
     "  run = n: double n;\n"
-    "in run 21\n"};
+    "  main = _: run 21;\n"
+    "in main\n"};
 
 /*
  * COMMONLISP — FULLY DRIFTED (defun not in generic) AND second-gap: the lisp
